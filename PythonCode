@@ -1,0 +1,228 @@
+import openai
+import pyttsx3
+import speech_recognition as sr
+import webbrowser
+import datetime
+import pyautogui
+import time
+import pyjokes
+import serial
+
+openai.api_key = "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"
+
+MASTER = "Boss"
+engine = pyttsx3.init('sapi5')
+voices = engine.getProperty('voices')
+engine.setProperty('voice', voices[0].id)
+engine.setProperty('rate', 150)
+engine.setProperty('volume', 1.0)
+
+def speak(text):
+    engine.say(text)
+    engine.runAndWait()
+
+try:
+    port = serial.Serial("COM3", 9600)
+    port_opened = True
+    print("Physical body, connected.")
+    speak("Physical body, connected")
+except Exception as e:
+    port_opened = False
+    print(f"Failed to connect to serial port: {e}")
+    #speak("Unable to detect the physical body. Proceeding without the body.")
+    port = None
+
+def search_google(query):
+    search_url = f"https://www.google.com/search?q={'+'.join(query.split())}"
+    webbrowser.open(search_url)
+
+def search_youtube(query):
+    url = f"https://www.youtube.com/results?search_query={'+'.join(query.split())}"
+    webbrowser.open(url)
+
+def send_command_to_arduino(command):
+    if port_opened:
+        port.write(command.encode())
+
+def wishMe():
+    print("Initializing...")
+    if port_opened == True:
+        send_command_to_arduino("d")
+        time.sleep(2)
+    else:
+        time.sleep(0)
+    hour = datetime.datetime.now().hour
+    if 0 <= hour < 12:
+        speak("Good Morning" + MASTER)
+    elif 12 <= hour < 18:
+        speak("Good Afternoon" + MASTER)
+    else:
+        speak("Good Evening" + MASTER)
+    speak("How may I help you?")
+
+def takeCommand():
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("Listening...")
+        audio = r.listen(source)
+
+    try:
+        print("Recognizing...")
+        query = r.recognize_google(audio, language='en-us')
+        print(f"Boss said: {query}\n")
+        if 'pause' in query.lower():
+            speak("Pausing...")
+            return "pause"
+
+        return query.lower()
+
+    except Exception as e:
+        print(e)
+        return ""
+
+def get_openai_response(query):
+    prompt = f'Boss: {query}\n Bard: '
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=150,  # Adjust this value based on desired sentence length
+    )
+    answer = response['choices'][0]['message']['content'].strip()
+    return answer
+
+
+def main():
+    #wishMe()
+    paused = False
+    while True:
+        query = takeCommand()
+
+        if query:
+            query = query.lower()
+
+            if 'pause' in query:
+                paused = not paused
+                if paused:
+                    speak("Assistant paused.")
+                    send_command_to_arduino("k")
+                else:
+                    speak("Resuming...")
+            elif 'resume' in query:
+                paused = False
+                speak("Resuming...")
+
+            elif not paused:
+                if 'search on google' in query:
+                    if port_opened == True:
+                        send_command_to_arduino("h")
+                        time.sleep(1)
+                    else:
+                        time.sleep(0)
+                    print("Searching Google...")
+                    search_query = query.replace("search on google", "")
+                    search_google(search_query)
+
+                elif 'joke' in query:
+                    while True:
+                        if port_opened == True:
+                            send_command_to_arduino("e")
+                            time.sleep(1)
+                        else:
+                            time.sleep(0)
+                        joke = pyjokes.get_joke()
+                        speak(pyjokes.get_joke())
+                        if port_opened == True:
+                            send_command_to_arduino("j")
+                            time.sleep(1)
+                        else:
+                            time.sleep(0)
+                        speak("Do you want to hear another joke?")
+                        response = takeCommand()
+                        if 'no' in response:
+                            speak("Ok Boss")
+                            break
+                        
+                elif 'search on youtube' in query:
+                    if port_opened == True:
+                        send_command_to_arduino("h")
+                        time.sleep(1)
+                    else:
+                        time.sleep(0)
+                    print("Searching YouTube...")
+                    search_query = query.replace("search on youtube", "")
+                    search_youtube(search_query)
+
+                elif 'open youtube' in query:
+                    if port_opened == True:
+                        send_command_to_arduino("h")
+                        time.sleep(1)
+                    else:
+                        time.sleep(0)
+                    print("Opening YouTube")
+                    speak("Opening YouTube...")
+                    webbrowser.open("https://www.youtube.com")
+
+                elif 'open google' in query:
+                    if port_opened == True:
+                        send_command_to_arduino("i")
+                        time.sleep(1)
+                    else:
+                        time.sleep(0)
+                    print("Opening Google")
+                    speak("Opening Google...")
+                    webbrowser.open("https://www.google.com")
+
+                elif 'time' in query:
+                    time_now = datetime.datetime.now().strftime("%H:%M:%S")
+                    speak(f"The current time is {time_now}")
+
+                elif 'shut' in query:
+                    if port_opened == True:
+                        send_command_to_arduino("f")
+                        time.sleep(1)
+                    else:
+                        time.sleep(0)
+                    speak("Alright Boss... Have a great day!")
+                    break
+    
+                elif 'hello' in query:
+                    if port_opened == True:
+                        send_command_to_arduino("1")
+                        time.sleep(1)
+                    else:
+                        time.sleep(0)
+                    speak("Hi Boss, what do you want to know?")
+                    
+                elif 'hands up' in query:
+                    if port_opened == True:
+                        send_command_to_arduino("u")
+                        time.sleep(1)
+                    else:
+                        time.sleep(0)
+                        speak("Sorry boss I'm unable to connect to my physical body")
+                
+                elif 'hands down' in query:
+                    if port_opened == True:
+                        send_command_to_arduino("v")
+                        time.sleep(1)
+                    else:
+                        time.sleep(0)
+                        speak("Sorry boss I'm unable to connect to my physical body")
+
+                else:
+                    if port_opened == True:
+                        send_command_to_arduino("j")
+                        time.sleep(1)
+                    else:
+                        time.sleep(0)
+                    openai_response = get_openai_response(query)
+                    print("Answer:", openai_response)
+                    speak(openai_response)
+    if port_opened:
+        port.close()
+
+if __name__ == '__main__':
+    main()
